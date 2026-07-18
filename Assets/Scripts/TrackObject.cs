@@ -1,4 +1,4 @@
-using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,7 +8,6 @@ public class TrackObject : MonoBehaviour
     [Tooltip("对应 MidiFileImporter.midiTracks 中的轨道索引，一条 Lane 对应一条 Track")]
     [SerializeField] private int trackIndex;
     [SerializeField] private NoteSpawner noteSpawner;
-    [SerializeField] private KeyCode keyCode;
 
     public GameObject notePrefab;
 
@@ -60,68 +59,26 @@ public class TrackObject : MonoBehaviour
         if (!SongManager.Instance.audioSource.isPlaying)
             return;
 
-        double audioTime = GetInputAudioTime();
+        double audioTime = SongManager.Instance.GetAudioSourceTime();
         float fallingTime = SongManager.Instance.GetNoteFallingTime();
 
         // 可能在同一帧内需要生成多个音符
         while (spawnIndex < timeStamps.Count &&
-               SongManager.Instance.GetAudioSourceTime() >= timeStamps[spawnIndex] - fallingTime)
+               audioTime >= timeStamps[spawnIndex] - fallingTime)
         {
-            NoteObject noteObject = noteSpawner.SpawnNewNote(trackIndex);
-            notes.Add(noteObject);
+            noteSpawner.SpawnNewNote();
             spawnIndex++;
         }
 
         if (inputIndex >= timeStamps.Count)
         {
             // end game
-            return;
-        }
-
-        double noteTime = timeStamps[inputIndex];
-        double margin = SongManager.Instance.marginOfError;
-
-        if (Input.GetKeyDown(keyCode))
-        {
-            double delta = audioTime - noteTime;
-
-            if (Math.Abs(delta) <= margin)
-            {
-                Hit();
-                inputIndex++;
-                return;
-            }
-
-            if (delta > margin)
-            {
-                Miss();
-                inputIndex++;
-                return;
-            }
-            // 太早按下：忽略本次输入，等待正确窗口
-        }
-
-        // 未按下也会超时 Miss，保证 inputIndex 能推进
-        if (audioTime > noteTime + margin)
-        {
-            Miss();
-            inputIndex++;
         }
     }
 
-    private double GetInputAudioTime()
-    {
-        return SongManager.Instance.GetAudioSourceTime()
-               - SongManager.Instance.inputDelayInMilliseconds / 1000.0;
-    }
 
     private void Hit()
     {
-        if (inputIndex < notes.Count && notes[inputIndex] != null)
-        {
-            Destroy(notes[inputIndex].gameObject);
-            notes[inputIndex] = null;
-        }
     }
 
     private void Miss()
