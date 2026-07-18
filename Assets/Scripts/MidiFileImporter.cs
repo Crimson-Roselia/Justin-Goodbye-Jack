@@ -50,6 +50,9 @@ public class MidiFileImporter : MonoBehaviour
     public List<MidiTrack> midiTracks = new List<MidiTrack>();
 
     public string levelPath = "Level 1";
+
+    [Header("测试：音符随机分配（不影响默认流程，需手动开启）")]
+    public bool enableTestNoteDistribute = false;
     
     void Awake()
     {
@@ -87,6 +90,122 @@ public class MidiFileImporter : MonoBehaviour
         }
         
         Debug.Log($"成功加载 {midiTracks.Count} 个MIDI轨道");
+
+        if (enableTestNoteDistribute)
+        {
+            TestDistributeNotesToNewTracks(0, 4);
+        }
+    }
+
+    /// <summary>
+    /// 测试方法：在 midiTracks 中新建 n 个轨道，
+    /// 将指定索引轨道中的音符随机分配到这些新轨道中。
+    /// 长音符会以 Note On/Off 成对分配，避免拆散。
+    /// </summary>
+    public void TestDistributeNotesToNewTracks(int sourceTrackIndex, int newTrackCount)
+    {
+        if (newTrackCount <= 0)
+        {
+            Debug.LogWarning("TestDistributeNotesToNewTracks: newTrackCount 必须大于 0");
+            return;
+        }
+
+        if (sourceTrackIndex < 0 || sourceTrackIndex >= midiTracks.Count)
+        {
+            Debug.LogWarning($"TestDistributeNotesToNewTracks: 无效的源轨道索引 {sourceTrackIndex}");
+            return;
+        }
+
+        MidiTrack sourceTrack = midiTracks[sourceTrackIndex];
+        if (sourceTrack.notes == null || sourceTrack.notes.Count == 0)
+        {
+            Debug.LogWarning($"TestDistributeNotesToNewTracks: 源轨道 [{sourceTrackIndex}] {sourceTrack.trackName} 没有音符可分配");
+            return;
+        }
+
+        List<MidiTrack> newTracks = new List<MidiTrack>(newTrackCount);
+        for (int i = 0; i < newTrackCount; i++)
+        {
+            MidiTrack newTrack = new MidiTrack($"{sourceTrack.trackName}_split_{i}", sourceTrack.isLongNote);
+            newTracks.Add(newTrack);
+            midiTracks.Add(newTrack);
+        }
+
+        List<List<MidiNote>> noteUnits = BuildNoteUnits(sourceTrack);
+        System.Random rng = new System.Random();
+
+        foreach (List<MidiNote> unit in noteUnits)
+        {
+            int targetIndex = rng.Next(newTrackCount);
+            newTracks[targetIndex].notes.AddRange(unit);
+        }
+
+        // 按时间排序，保持各新轨道内事件顺序正确
+        foreach (MidiTrack track in newTracks)
+        {
+            track.notes.Sort((a, b) => a.timeInBeats.CompareTo(b.timeInBeats));
+        }
+
+        int movedCount = sourceTrack.notes.Count;
+        sourceTrack.notes.Clear();
+
+        Debug.Log($"TestDistributeNotesToNewTracks: 已将轨道 [{sourceTrackIndex}] {sourceTrack.trackName} 的 {movedCount} 个音符事件随机分配到 {newTrackCount} 个新轨道");
+    }
+
+    /// <summary>
+    /// 将轨道音符整理为可分配单元：单音符每个独立；长音符 Note On 与对应 Note Off 成对。
+    /// </summary>
+    List<List<MidiNote>> BuildNoteUnits(MidiTrack track)
+    {
+        List<List<MidiNote>> units = new List<List<MidiNote>>();
+
+        if (!track.isLongNote)
+        {
+            foreach (MidiNote note in track.notes)
+            {
+                units.Add(new List<MidiNote> { note });
+            }
+            return units;
+        }
+
+        // 长音符：为每个 pitch 维护待配对的 Note On 队列
+        Dictionary<int, Queue<MidiNote>> pendingNoteOns = new Dictionary<int, Queue<MidiNote>>();
+
+        foreach (MidiNote note in track.notes)
+        {
+            if (note.isNoteOn)
+            {
+                if (!pendingNoteOns.ContainsKey(note.pitch))
+                {
+                    pendingNoteOns[note.pitch] = new Queue<MidiNote>();
+                }
+                pendingNoteOns[note.pitch].Enqueue(note);
+            }
+            else
+            {
+                if (pendingNoteOns.ContainsKey(note.pitch) && pendingNoteOns[note.pitch].Count > 0)
+                {
+                    MidiNote noteOn = pendingNoteOns[note.pitch].Dequeue();
+                    units.Add(new List<MidiNote> { noteOn, note });
+                }
+                else
+                {
+                    // 孤立的 Note Off，单独作为单元
+                    units.Add(new List<MidiNote> { note });
+                }
+            }
+        }
+
+        // 未配对的 Note On 单独作为单元
+        foreach (var kvp in pendingNoteOns)
+        {
+            while (kvp.Value.Count > 0)
+            {
+                units.Add(new List<MidiNote> { kvp.Value.Dequeue() });
+            }
+        }
+
+        return units;
     }
     
     /// <summary>
