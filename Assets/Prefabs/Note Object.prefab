@@ -19182,3 +19182,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 92555224b1faf1a4ab94970cab5c9323, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  hitVfx: {fileID: 1205163511716973528, guid: 12a86bdbb79ee5a45829587983baa241, type: 3}

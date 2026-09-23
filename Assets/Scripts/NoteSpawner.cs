@@ -4,14 +4,15 @@ using UnityEngine;
 
 public class NoteSpawner : MonoBehaviour
 {
-    [SerializeField] private GameObject notePrefab;
-    [SerializeField] private Transform noteSpawnPosition;
+    [SerializeField] private List<GameObject> notePrefabs;
+    [SerializeField] private List<Transform> noteSpawnPoints;
     [SerializeField] private Transform noteMissLine;
 
 
-    public void SpawnNewNote()
+    public NoteObject SpawnNewNote(int trackIndex, int prefabIndex)
     {
-        NoteObject noteObject = Instantiate(notePrefab, noteSpawnPosition.position, notePrefab.transform.rotation).GetComponent<NoteObject>();
+        NoteObject noteObject = Instantiate(notePrefabs[prefabIndex], noteSpawnPoints[trackIndex].position, notePrefabs[prefabIndex].transform.rotation).GetComponent<NoteObject>();
         noteObject.SetXThereshold(noteMissLine.transform.position.x);
+        return noteObject;
     }
 }

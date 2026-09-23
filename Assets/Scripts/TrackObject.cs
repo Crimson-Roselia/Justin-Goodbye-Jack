@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -7,7 +8,12 @@ public class TrackObject : MonoBehaviour
     [SerializeField] private MidiFileImporter midiFileImporter;
     [Tooltip("对应 MidiFileImporter.midiTracks 中的轨道索引，一条 Lane 对应一条 Track")]
     [SerializeField] private int trackIndex;
+    [SerializeField] private int noteTheme;
     [SerializeField] private NoteSpawner noteSpawner;
+    [SerializeField] private KeyCode trackKey;
+    [Header("Debug")]
+    [Tooltip("开启后，音符到达 noteTime 时自动 Hit()，无需按键")]
+    [SerializeField] private bool autoHit;
 
     public GameObject notePrefab;
 
@@ -59,29 +65,79 @@ public class TrackObject : MonoBehaviour
         if (!SongManager.Instance.audioSource.isPlaying)
             return;
 
-        double audioTime = SongManager.Instance.GetAudioSourceTime();
+        double audioTime = GetInputAudioTime();
         float fallingTime = SongManager.Instance.GetNoteFallingTime();
 
         // 可能在同一帧内需要生成多个音符
         while (spawnIndex < timeStamps.Count &&
-               audioTime >= timeStamps[spawnIndex] - fallingTime)
+               SongManager.Instance.GetAudioSourceTime() >= timeStamps[spawnIndex] - fallingTime)
         {
-            noteSpawner.SpawnNewNote();
+            NoteObject note = noteSpawner.SpawnNewNote(trackIndex, noteTheme);
+            notes.Add(note);
             spawnIndex++;
         }
 
         if (inputIndex >= timeStamps.Count)
         {
+            return;
             // end game
+        }
+
+        double noteTime = timeStamps[inputIndex];
+        double margin = SongManager.Instance.marginOfError;
+        double delta = audioTime - noteTime;
+
+        if (autoHit && audioTime >= noteTime)
+        {
+            Hit();
+            inputIndex++;
+            return;
+        }
+
+        if (Input.GetKeyDown(trackKey))
+        {
+
+            if(Math.Abs(delta) < margin)
+            {
+                Hit();
+                inputIndex++;
+                return;
+            }
+
+            if(delta > margin)
+            {
+                Miss();
+                inputIndex++;
+                return;
+            }
+        }
+
+        if(audioTime > noteTime + margin)
+        {
+            Miss();
+            inputIndex++;
         }
     }
 
 
     private void Hit()
     {
+        if (inputIndex < notes.Count && notes[inputIndex] != null)
+        {
+            notes[inputIndex].OnHit();
+            notes[inputIndex] = null;
+        }
+
+        if (ScoreManager.Instance != null)
+            ScoreManager.Instance.AddHitScore();
     }
 
     private void Miss()
     {
+    }
+
+    private double GetInputAudioTime()
+    {
+        return SongManager.Instance.GetAudioSourceTime() - SongManager.Instance.inputDelayInMilliseconds / 1000.0;
     }
 }

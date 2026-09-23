@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class NoteObject : MonoBehaviour
 {
+    [SerializeField] private GameObject hitVfx;
+
     private float _speed = 0.65f;
     private float _xThereshold;
 
@@ -24,5 +26,11 @@ public class NoteObject : MonoBehaviour
         {
             Destroy(gameObject);
         }
+    }
+
+    public void OnHit()
+    {
+        Instantiate(hitVfx, transform.position + new Vector3(0, 0.05f, 0), Quaternion.identity);
+        Destroy(gameObject);
     }
 }
